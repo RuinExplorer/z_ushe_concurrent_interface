@@ -20,6 +20,7 @@ AS
                                             f_translate_bool
                                             f_translate_citizenship
                                           update to f_get_term
+     20170405  Carl Ellsworth, USU        added field act_test_date
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -850,6 +851,7 @@ AS
                    act_english,
                    act_ela,
                    act_composite,
+                   act_test_date,
                    english_first_lang_bool,
                    claimed_dependent_bool,
                    student_receive_info_bool,

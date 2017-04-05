@@ -45,6 +45,7 @@ CREATE TABLE Z_USHE_CSV_EXT
     act_english                 VARCHAR2 (32),
     act_ela                     VARCHAR2 (32),
     act_composite               VARCHAR2 (32),
+    act_test_date               VARCHAR2 (32),
     english_first_lang_bool     VARCHAR2 (32),
     claimed_dependent_bool      VARCHAR2 (32),
     student_receive_info_bool   VARCHAR2 (32),
