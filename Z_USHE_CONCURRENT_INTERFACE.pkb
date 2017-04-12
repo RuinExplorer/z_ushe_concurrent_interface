@@ -1,4 +1,4 @@
-/* Formatted on 3/8/2017 2:37:32 PM (QP5 v5.300) */
+/* Formatted on 4/12/2017 4:01:09 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -21,6 +21,7 @@ AS
                                             f_translate_citizenship
                                           update to f_get_term
      20170405  Carl Ellsworth, USU        added field act_test_date
+     20170412  Carl Ellsworth, USU        added procedure for SARTEST
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -32,7 +33,7 @@ AS
     --GLOBAL VARIABLES
     gv_process_date                 DATE := SYSDATE;
 
-    --global variables requiring update from school
+    --global variables, requires update from school
     gv_folder_name         CONSTANT VARCHAR2 (30) := 'USHE_ETL'; --oracle directory for USHE file
     gv_wapp_code           CONSTANT VARCHAR2 (2) := 'CE'; --STVWAPP, Banner default is 'W7'
     gv_apls_code           CONSTANT VARCHAR2 (4) := 'WEB'; --STVAPLS, Banner default is 'WEB'
@@ -44,6 +45,17 @@ AS
     gv_pqlf_code_email     CONSTANT VARCHAR2 (2) := 'EM'; --SAAERUL, PQRF-EMAILPDRFCODE
     gv_parent1_rtln_code   CONSTANT VARCHAR2 (2) := 'M';             --STVRELT
     gv_parent2_rtln_code   CONSTANT VARCHAR2 (2) := 'F';             --STVRELT
+
+    --global variables specific to ACT test score loading, requires update from school
+    gv_act_writing         CONSTANT VARCHAR2 (6) := 'A07'; --STVTESC, act_writing
+    gv_act_science         CONSTANT VARCHAR2 (6) := 'A04'; --STVTESC, act_science
+    gv_act_stem            CONSTANT VARCHAR2 (6) := 'A14'; --STVTESC, act_stem
+    gv_act_reading         CONSTANT VARCHAR2 (6) := 'A03'; --STVTESC, act_reading
+    gv_act_math            CONSTANT VARCHAR2 (6) := 'A02'; --STVTESC, act_math
+    gv_act_english         CONSTANT VARCHAR2 (6) := 'A01'; --STVTESC, act_english
+    gv_act_ela             CONSTANT VARCHAR2 (6) := 'A13';  --STVTESC, act_ela
+    gv_act_composite       CONSTANT VARCHAR2 (6) := 'A05'; --STVTESC, act_composite
+
 
     ----------------------------------------------------------------------------
 
@@ -302,7 +314,7 @@ AS
 
     /**
     * translation of state to Banner State Code. USHE system opted for full spelling
-    * of state names in the address. this looks that up for the Banner state code.
+    * of state names in the address. this looks up the Banner state code.
     *
     * @param    param_state     USHE state value
     * @return                   Banner state code
@@ -799,6 +811,52 @@ AS
             RAISE;
     END p_insert_residency;
 
+    /**
+    * creates a new record in the test score table.
+    *
+    * @param    param_aidm         newly reserved aidm on which to build the record
+    * @param    param_seqno        test score sequence number
+    * @param    param_test_date    string representation of test date, ie '08/25/1998'
+    * @param    param_subt_code    Banner STVTESC code for test
+    * @param    param_test_score   string test score
+    */
+    PROCEDURE p_insert_sartest (param_aidm          NUMBER,
+                                param_seqno         NUMBER,
+                                param_test_date     VARCHAR2,
+                                param_subt_code     VARCHAR2,
+                                param_test_score    VARCHAR2)
+    AS
+    BEGIN
+        IF param_aidm IS NOT NULL
+        THEN
+            INSERT INTO SARTEST (SARTEST_AIDM,
+                                 SARTEST_APPL_SEQNO,
+                                 SARTEST_SEQNO,
+                                 SARTEST_LOAD_IND,
+                                 SARTEST_ACTIVITY_DATE,
+                                 SARTEST_DFMT_CDE,
+                                 SARTEST_TEST_DTE,
+                                 SARTEST_SUBT_CDE,
+                                 SARTEST_TEST_SCORE1,
+                                 SARTEST_DATA_ORIGIN)
+                 VALUES (param_aidm,
+                         1,                         --always first application
+                         param_seqno,
+                         'N',                                 --load indicator
+                         gv_process_date,
+                         'MDC',  --date format string MDC is Month/Day/Century
+                         param_test_date,
+                         param_subt_code,
+                         param_test_score,
+                         gv_data_origin);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in procedure p_insert_sartest');
+            RAISE;
+    END p_insert_sartest;
 
     /**
     * parses the ushe data file and populate the SAR*** tables prepetory to Banner
@@ -876,8 +934,9 @@ AS
                    applied_freshman_bool
               FROM Z_USHE_CSV_EXT;
 
-        lv_aidm    NUMBER (8);
-        lv_count   NUMBER (4) := 0;
+        lv_aidm         NUMBER (8);
+        lv_count        NUMBER (4) := 0;
+        lv_test_count   NUMBER (2) := 0;
     BEGIN
         FOR r_student IN c_student
         LOOP
@@ -976,6 +1035,108 @@ AS
                 param_residency_bool   => f_translate_residency (
                                              r_student.residency));
 
+            --create ACT test score entries
+            BEGIN
+                lv_test_count := 0;
+
+                --act_writing
+                IF r_student.act_writing IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_writing,
+                        param_test_score   => r_student.act_writing);
+                END IF;
+
+                --act_science
+                IF r_student.act_science IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_science,
+                        param_test_score   => r_student.act_science);
+                END IF;
+
+                --act_stem
+                IF r_student.act_stem IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_stem,
+                        param_test_score   => r_student.act_stem);
+                END IF;
+
+                --act_reading
+                IF r_student.act_reading IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_reading,
+                        param_test_score   => r_student.act_reading);
+                END IF;
+
+                --act_math
+                IF r_student.act_math IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_math,
+                        param_test_score   => r_student.act_math);
+                END IF;
+
+                --act_english
+                IF r_student.act_english IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_english,
+                        param_test_score   => r_student.act_english);
+                END IF;
+
+                --act_ela
+                IF r_student.act_ela IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_ela,
+                        param_test_score   => r_student.act_ela);
+                END IF;
+
+                --act_composite
+                IF r_student.act_composite IS NOT NULL
+                THEN
+                    lv_test_count := lv_test_count + 1;
+                    p_insert_sartest (
+                        param_aidm         => lv_aidm,
+                        param_seqno        => lv_test_count,
+                        param_test_date    => r_student.act_test_date,
+                        param_subt_code    => gv_act_composite,
+                        param_test_score   => r_student.act_composite);
+                END IF;
+            END;
+
+            --update count for process DBMS output
             lv_count := lv_count + 1;
         END LOOP;
 
