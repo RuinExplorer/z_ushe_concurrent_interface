@@ -1,5 +1,4 @@
-/* Formatted on 4/12/2017 4:01:09 PM (QP5 v5.300) */
-CREATE OR REPLACE PACKAGE BODY z_ushe_concurrent_interface
+CREATE OR REPLACE PACKAGE BODY Z_CARL_ELLSWORTH.z_ushe_concurrent_interface
 AS
     /******************************************************************************
      REVISIONS:
@@ -22,6 +21,9 @@ AS
                                           update to f_get_term
      20170405  Carl Ellsworth, USU        added field act_test_date
      20170412  Carl Ellsworth, USU        added procedure for SARTEST
+     20170413  Carl Ellsworth, USU        added procedures for SARHSCH, SARHSUM
+                                            added f_translate_school_code
+                                            changed f_translate_birth to f_translate_date
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -45,6 +47,7 @@ AS
     gv_pqlf_code_email     CONSTANT VARCHAR2 (2) := 'EM'; --SAAERUL, PQRF-EMAILPDRFCODE
     gv_parent1_rtln_code   CONSTANT VARCHAR2 (2) := 'M';             --STVRELT
     gv_parent2_rtln_code   CONSTANT VARCHAR2 (2) := 'F';             --STVRELT
+    gv_xlbl_sbgi           CONSTANT VARCHAR2 (8) := 'STVSBGI'; --SORXREF label for SBGI entries
 
     --global variables specific to ACT test score loading, requires update from school
     gv_act_writing         CONSTANT VARCHAR2 (6) := 'A07'; --STVTESC, act_writing
@@ -55,7 +58,6 @@ AS
     gv_act_english         CONSTANT VARCHAR2 (6) := 'A01'; --STVTESC, act_english
     gv_act_ela             CONSTANT VARCHAR2 (6) := 'A13';  --STVTESC, act_ela
     gv_act_composite       CONSTANT VARCHAR2 (6) := 'A05'; --STVTESC, act_composite
-
 
     ----------------------------------------------------------------------------
 
@@ -122,7 +124,6 @@ AS
             RAISE;
     END f_get_term;
 
-
     /**
     * translates the mixed USHE system booleans to Banner booleans.
     *
@@ -176,32 +177,32 @@ AS
     END f_translate_bool;
 
     /**
-    * translaters USHE split birth date fields to single date string.
+    * translates USHE split date fields to single date string.
     *
-    * 20170308 - made potentiall obsolete by spec change.
+    * 20170308 - made potentially obsolete by spec change.
     *
-    * @param    param_month     USHE birth month spelled out
-    * @param    param_day       USHE birth day
-    * @param    param_year      USHE birth year
-    * @return                   Banner birthdate
+    * @param    param_month     USHE date month spelled out
+    * @param    param_day       USHE date day
+    * @param    param_year      USHE date year
+    * @return                   date string MDC format
     */
-    FUNCTION f_translate_birth (param_month    VARCHAR2,
-                                param_day      VARCHAR2,
-                                param_year     VARCHAR2)
+    FUNCTION f_translate_date (param_month    VARCHAR2,
+                               param_day      VARCHAR2 DEFAULT '01',
+                               param_year     VARCHAR2)
         RETURN VARCHAR2
     AS
-        lv_birthdate   VARCHAR2 (16);
+        lv_date   VARCHAR2 (16);
     BEGIN
-        lv_birthdate := param_month || '/' || param_day || '/' || param_year;
+        lv_date := param_month || '/' || param_day || '/' || param_year;
 
-        RETURN lv_birthdate;
+        RETURN lv_date;
     EXCEPTION
         WHEN OTHERS
         THEN
             DBMS_OUTPUT.put_line (
-                'EXCEPTION - unhandled exception in function f_translate_birth');
+                'EXCEPTION - unhandled exception in function f_translate_date');
             RAISE;
-    END f_translate_birth;
+    END f_translate_date;
 
     /**
     * translaters USHE gender to Banner gender.
@@ -381,6 +382,42 @@ AS
             RAISE;
     END f_translate_residency;
 
+    /**
+    * translation of lea/school code to Banner SBGI value.
+    * requires population of SORXREF (SOAXREF) for transation to work.
+    * utilizes sorxref_edi_standard_ind as active indicator, must be 'Y' to resolve.
+    *
+    * @param    param_lea_code      USHE lea code
+    * @param    param_school_code   USHE school code
+    * @return                       Banner SBGI code
+    */
+    FUNCTION f_translate_school_code (param_lea_code       VARCHAR2,
+                                      param_school_code    VARCHAR2)
+        RETURN VARCHAR2
+    AS
+        lv_sbgi   VARCHAR2 (6) := NULL;
+    BEGIN
+        SELECT sorxref_banner_value
+          INTO lv_sbgi
+          FROM sorxref
+         WHERE     sorxref_xlbl_code = 'STVSBGI'
+               AND sorxref_edi_standard_ind = 'Y'
+               AND sorxref_edi_value =
+                          LPAD (param_lea_code, 2, '0')
+                       || '-'
+                       || param_school_code;
+
+        RETURN lv_sbgi;
+    EXCEPTION
+        WHEN NO_DATA_FOUND
+        THEN
+            RETURN NULL;
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in function f_translate_school_code');
+            RAISE;
+    END f_translate_school_code;
 
     /**
     * creates a base record in Banner electronic admissions.
@@ -859,6 +896,103 @@ AS
     END p_insert_sartest;
 
     /**
+    * creates a new record in the academic status table.
+    *
+    * @param    param_aidm              newly reserved aidm on which to build the record
+    * @param    param_sbgi_code         banner sbgi code for school, USHE cannot provide this.
+    *                                      translation will be needed from LEA/School code to SBGI
+    * @param    param_graduation_date   string representation of graduation date, ie '08/25/1998'
+    * @param    param_school_name       high school name from USHE
+    */
+    PROCEDURE p_insert_sarhsch (param_aidm               NUMBER,
+                                param_sbgi_code          VARCHAR2,
+                                param_graduation_date    VARCHAR2,
+                                param_school_name        VARCHAR2)
+    AS
+    BEGIN
+        IF param_aidm IS NOT NULL
+        THEN
+            INSERT INTO SARHSCH (SARHSCH_AIDM,
+                                 SARHSCH_APPL_SEQNO,
+                                 SARHSCH_SEQNO,
+                                 SARHSCH_LOAD_IND,
+                                 SARHSCH_ACTIVITY_DATE,
+                                 SARHSCH_IDQL_CDE1,
+                                 SARHSCH_IDEN_CDE1,
+                                 SARHSCH_DFMT_CDE_HSGR,
+                                 SARHSCH_HSGR_DTE,
+                                 SARHSCH_ENTY_CDE1,
+                                 SARHSCH_NAME1,
+                                 SARHSCH_DATA_ORIGIN)
+                 VALUES (param_aidm,
+                         1,                         --always first application
+                         1,                   --only loading one school record
+                         'N',                                 --load indicator
+                         gv_process_date,
+                         'WB',             --unknown, all our entires are 'WB'
+                         param_sbgi_code,
+                         'MDC',  --date format string MDC is Month/Day/Century
+                         param_graduation_date,
+                         'HS',                   --high school identifier code
+                         param_school_name,
+                         gv_data_origin);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in procedure p_insert_sarhsch');
+            RAISE;
+    END p_insert_sarhsch;
+
+    /**
+    * creates a new record in the degree summary information table.
+    *
+    * @param    param_aidm         newly reserved aidm on which to build the record
+    * @param    param_gpa          high school gpa
+    * @param    param_class_rank   high school rank
+    * @param    param_class_size   high school class size
+    */
+    PROCEDURE p_insert_sarhsum (param_aidm          NUMBER,
+                                param_gpa           VARCHAR2,
+                                param_class_rank    VARCHAR2 DEFAULT NULL,
+                                param_class_size    VARCHAR2 DEFAULT NULL)
+    AS
+    BEGIN
+        IF param_aidm IS NOT NULL
+        THEN
+            INSERT INTO SARHSUM (SARHSUM_AIDM,
+                                 SARHSUM_APPL_SEQNO,
+                                 SARHSUM_HSCH_SEQNO,
+                                 SARHSUM_SEQNO,
+                                 SARHSUM_LOAD_IND,
+                                 SARHSUM_ACTIVITY_DATE,
+                                 SARHSUM_CUMULATIVE_FLAG,
+                                 SARHSUM_GPA,
+                                 SARHSUM_CLASS_RANK,
+                                 SARHSUM_CLASS_SIZE,
+                                 SARHSUM_DATA_ORIGIN)
+                 VALUES (param_aidm,
+                         1,                         --always first application
+                         1,                    --only loaded one school record
+                         1,                  --only loading one summary record
+                         'N',                                 --load indicator
+                         gv_process_date,
+                         'Y',                         --loading cumulative GPA
+                         param_gpa,
+                         param_class_rank,
+                         param_class_size,
+                         gv_data_origin);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in procedure p_insert_sarhsum');
+            RAISE;
+    END p_insert_sarhsum;
+
+    /**
     * parses the ushe data file and populate the SAR*** tables prepetory to Banner
     * SARETMT process to admit students.
     *
@@ -957,7 +1091,7 @@ AS
                 param_person_seqno   => 1,
                 param_first_name     => r_student.student_first,
                 param_last_name      => r_student.student_last,
-                param_birth_string   => f_translate_birth (
+                param_birth_string   => f_translate_date (
                                            r_student.birth_month,
                                            r_student.birth_day,
                                            r_student.birth_year),
@@ -1135,6 +1269,25 @@ AS
                         param_test_score   => r_student.act_composite);
                 END IF;
             END;
+
+            --create the high school record
+            p_insert_sarhsch (
+                param_aidm              => lv_aidm,
+                param_sbgi_code         => f_translate_school_code (
+                                              param_lea_code      => r_student.district_code,
+                                              param_school_code   => r_student.high_school_code),
+                param_graduation_date   => f_translate_date (
+                                              param_month   => r_student.anticipated_grad_month,
+                                              param_day     => NULL,
+                                              param_year    => r_student.anticipated_grad_year),
+                param_school_name       => r_student.high_school_desc);
+
+            --create the high school info record
+            IF (r_student.gpa IS NOT NULL)
+            THEN
+                p_insert_sarhsum (param_aidm   => lv_aidm,
+                                  param_gpa    => r_student.gpa);
+            END IF;
 
             --update count for process DBMS output
             lv_count := lv_count + 1;
