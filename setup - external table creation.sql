@@ -74,11 +74,15 @@ ORGANIZATION EXTERNAL
           DEFAULT DIRECTORY USHE_ETL
               ACCESS PARAMETERS (
                   RECORDS DELIMITED BY NEWLINE
-                  SKIP 1                             --skips the header record
+                  SKIP 1
                   FIELDS
                       TERMINATED BY ','
                       OPTIONALLY ENCLOSED BY '"'
                       LRTRIM
                   MISSING FIELD VALUES ARE NULL
+                  REJECT ROWS WITH ALL NULL FIELDS
               )
           LOCATION ('sn_ushe_data.csv'));
+
+--if needed for testing
+ALTER TABLE Z_USHE_CSV_EXT location (USHE_ETL:'sn_ushe_data.csv');
