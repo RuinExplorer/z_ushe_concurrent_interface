@@ -1,3 +1,4 @@
+/* Formatted on 4/14/2017 4:41:03 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY Z_CARL_ELLSWORTH.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -24,6 +25,8 @@ AS
      20170413  Carl Ellsworth, USU        added procedures for SARHSCH, SARHSUM
                                             added f_translate_school_code
                                             changed f_translate_birth to f_translate_date
+     20170414  Carl Ellsworth, USU        added application_number and success indicator
+                                            to p_insert_SABNSTU to prevent duplicates
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -423,8 +426,12 @@ AS
     * creates a base record in Banner electronic admissions.
     *
     * @param    param_aidm     newly reserved aidm on which to build the record
+    * @param    param_id       truncated USHE application_number
+    * @param    param_success  out parameter to indicate if insert was successful
     */
-    PROCEDURE p_insert_sabnstu (param_aidm NUMBER)
+    PROCEDURE p_insert_sabnstu (param_aidm          NUMBER,
+                                param_id            VARCHAR2,
+                                param_success   OUT VARCHAR2)
     AS
     BEGIN
         IF param_aidm IS NOT NULL
@@ -434,13 +441,22 @@ AS
                                  SABNSTU_LOCKED_IND,
                                  SABNSTU_ACTIVITY_DATE,
                                  SABNSTU_DATA_ORIGIN)
-                 VALUES (param_aidm,       --set the web user id equal to aidm
+                 VALUES (param_id,     --set the web user id equal to CEAPP_ID
                          param_aidm,                            --set the aidm
                          'Y',                           --lock the web account
                          gv_process_date,
                          gv_data_origin);
+
+            param_success := 'Y';
         END IF;
     EXCEPTION
+        WHEN DUP_VAL_ON_INDEX
+        THEN
+            param_success := 'N';
+            DBMS_OUTPUT.put_line (
+                   'EXCEPTION - record CEAPP'
+                || param_id
+                || ' has already been processed - skipping.');
         WHEN OTHERS
         THEN
             DBMS_OUTPUT.put_line (
@@ -1068,17 +1084,29 @@ AS
                    applied_freshman_bool
               FROM Z_USHE_CSV_EXT;
 
-        lv_aidm         NUMBER (8);
-        lv_count        NUMBER (4) := 0;
-        lv_test_count   NUMBER (2) := 0;
+        lv_aidm           NUMBER (8);
+        lv_success_flag   VARCHAR2 (1) := NULL;
+        lv_count          NUMBER (4) := 0;
+        lv_test_count     NUMBER (2) := 0;
     BEGIN
         FOR r_student IN c_student
         LOOP
+            lv_success_flag := 'Y';
+
             --obtain an aidm
             lv_aidm := f_reserve_aidm ();
 
             --create a base record
-            p_insert_sabnstu (param_aidm => lv_aidm);
+            p_insert_sabnstu (
+                param_aidm      => lv_aidm,
+                param_id        => REPLACE (r_student.application_number,
+                                            'CEAPP',
+                                            ''),
+                param_success   => lv_success_flag);
+
+            --if header record creation failed, skip this loop iteration
+            CONTINUE WHEN lv_success_flag = 'N';
+
             --create a header record
             p_insert_sarhead (
                 param_aidm        => lv_aidm,
