@@ -1,11 +1,9 @@
-/* Formatted on 3/13/2017 1:32:00 PM (QP5 v5.300) */
+/* Formatted on 4/14/2017 4:48:31 PM (QP5 v5.300) */
   SELECT *
     FROM dba_directories
 ORDER BY directory_name;
 
 SELECT * FROM Z_USHE_CSV_EXT;
-
-ALTER TABLE Z_USHE_CSV_EXT location (USHE_ETL:'sn_ushe_data.csv');
 
 BEGIN
     z_ushe_concurrent_interface.p_process_records ();
@@ -47,10 +45,38 @@ SELECT *
   FROM sarrqst
  WHERE sarrqst_data_origin = 'RAZIEL';
 
+SELECT *
+  FROM sartest
+ WHERE sartest_data_origin = 'RAZIEL';
+
+SELECT *
+  FROM sarhsch
+ WHERE sarhsch_data_origin = 'RAZIEL';
+
+SELECT *
+  FROM sarhsum
+ WHERE sarhsum_data_origin = 'RAZIEL';
+
+
 SELECT SYSDATE - 1
   FROM DUAL;
 
 BEGIN                                                         --remove process
+    DELETE FROM sarhsum
+          WHERE     sarhsum_data_origin = 'RAZIEL'
+                AND sarhsum_activity_date >= SYSDATE - 1
+                AND sarhsum_aidm > 507673;
+
+    DELETE FROM saraddr
+          WHERE     sarhsch_data_origin = 'RAZIEL'
+                AND sarhsch_activity_date >= SYSDATE - 1
+                AND sarhsch_aidm > 507673;
+
+    DELETE FROM saraddr
+          WHERE     sartest_data_origin = 'RAZIEL'
+                AND ssartest_activity_date >= SYSDATE - 1
+                AND sartest_aidm > 507673;
+
     DELETE FROM saraddr
           WHERE     saraddr_data_origin = 'RAZIEL'
                 AND saraddr_activity_date >= SYSDATE - 1
