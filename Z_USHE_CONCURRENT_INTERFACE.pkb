@@ -1,4 +1,4 @@
-/* Formatted on 4/14/2017 4:41:03 PM (QP5 v5.300) */
+/* Formatted on 4/19/2017 12:32:22 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY Z_CARL_ELLSWORTH.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -27,6 +27,8 @@ AS
                                             changed f_translate_birth to f_translate_date
      20170414  Carl Ellsworth, USU        added application_number and success indicator
                                             to p_insert_SABNSTU to prevent duplicates
+     20170419  Carl Ellsworth, USU        updated date translation for better
+                                            fault tollerance
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -194,9 +196,17 @@ AS
                                param_year     VARCHAR2)
         RETURN VARCHAR2
     AS
-        lv_date   VARCHAR2 (16);
+        lv_date   VARCHAR2 (16) := NULL;
     BEGIN
-        lv_date := param_month || '/' || param_day || '/' || param_year;
+        IF (param_month IS NOT NULL AND param_year IS NOT NULL)
+        THEN
+            lv_date :=
+                   param_month
+                || '/'
+                || NVL (param_day, '01')
+                || '/'
+                || param_year;
+        END IF;
 
         RETURN lv_date;
     EXCEPTION
