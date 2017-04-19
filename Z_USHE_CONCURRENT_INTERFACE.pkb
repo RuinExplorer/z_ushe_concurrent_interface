@@ -1,4 +1,4 @@
-/* Formatted on 4/19/2017 12:32:22 PM (QP5 v5.300) */
+/* Formatted on 4/19/2017 3:59:33 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY Z_CARL_ELLSWORTH.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -28,7 +28,9 @@ AS
      20170414  Carl Ellsworth, USU        added application_number and success indicator
                                             to p_insert_SABNSTU to prevent duplicates
      20170419  Carl Ellsworth, USU        updated date translation for better
-                                            fault tollerance
+                                            fault tollerance,
+                                            changed date format for full date fields
+                                            due to spec change
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -186,7 +188,7 @@ AS
     *
     * 20170308 - made potentially obsolete by spec change.
     *
-    * @param    param_month     USHE date month spelled out
+    * @param    param_month     USHE date month
     * @param    param_day       USHE date day
     * @param    param_year      USHE date year
     * @return                   date string MDC format
@@ -1025,6 +1027,8 @@ AS
     */
     PROCEDURE p_process_records
     AS
+        null_test_date    EXCEPTION;
+
         CURSOR c_student
         IS
             SELECT application_number,
@@ -1098,6 +1102,7 @@ AS
         lv_success_flag   VARCHAR2 (1) := NULL;
         lv_count          NUMBER (4) := 0;
         lv_test_count     NUMBER (2) := 0;
+        lv_test_date      VARCHAR2 (10) := NULL;
     BEGIN
         FOR r_student IN c_student
         LOOP
@@ -1211,6 +1216,18 @@ AS
             BEGIN
                 lv_test_count := 0;
 
+                IF r_student.act_test_date IS NOT NULL
+                THEN
+                    lv_test_date :=
+                           SUBSTR (r_student.act_test_date, 6, 2)
+                        || CHR (47)
+                        || SUBSTR (r_student.act_test_date, 9, 2)
+                        || CHR (47)
+                        || SUBSTR (r_student.act_test_date, 1, 4);
+                ELSE
+                    RAISE null_test_date;
+                END IF;
+
                 --act_writing
                 IF r_student.act_writing IS NOT NULL
                 THEN
@@ -1218,7 +1235,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_writing,
                         param_test_score   => r_student.act_writing);
                 END IF;
@@ -1230,7 +1247,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_science,
                         param_test_score   => r_student.act_science);
                 END IF;
@@ -1242,7 +1259,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_stem,
                         param_test_score   => r_student.act_stem);
                 END IF;
@@ -1254,7 +1271,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_reading,
                         param_test_score   => r_student.act_reading);
                 END IF;
@@ -1266,7 +1283,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_math,
                         param_test_score   => r_student.act_math);
                 END IF;
@@ -1278,7 +1295,7 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_english,
                         param_test_score   => r_student.act_english);
                 END IF;
@@ -1287,12 +1304,11 @@ AS
                 IF r_student.act_ela IS NOT NULL
                 THEN
                     lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
-                        param_subt_code    => gv_act_ela,
-                        param_test_score   => r_student.act_ela);
+                    p_insert_sartest (param_aidm         => lv_aidm,
+                                      param_seqno        => lv_test_count,
+                                      param_test_date    => lv_test_date,
+                                      param_subt_code    => gv_act_ela,
+                                      param_test_score   => r_student.act_ela);
                 END IF;
 
                 --act_composite
@@ -1302,10 +1318,19 @@ AS
                     p_insert_sartest (
                         param_aidm         => lv_aidm,
                         param_seqno        => lv_test_count,
-                        param_test_date    => r_student.act_test_date,
+                        param_test_date    => lv_test_date,
                         param_subt_code    => gv_act_composite,
                         param_test_score   => r_student.act_composite);
                 END IF;
+            EXCEPTION
+                WHEN null_test_date
+                THEN
+                    NULL;
+            /*DBMS_OUTPUT.put_line (
+                   REPLACE (r_student.application_number,
+                            'CEAPP',
+                            '')
+                || ' had no test date.');*/
             END;
 
             --create the high school record
