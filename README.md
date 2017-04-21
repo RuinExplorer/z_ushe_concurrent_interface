@@ -3,14 +3,14 @@ Custom Banner package designed for Utah state colleges to consume USHE concurren
 
 Setup Instructions:
 
-1 - begin with "setup - directory creation and grants.sql"
+1 - Begin with "setup - directory creation and grants.sql".
     This creates the oracle directory (you may need to update the path) and grants permissions 
 
-2 - then use "setup - external table creation.sql"
+2 - Then use "setup - external table creation.sql".
     This create the external table definition for use by the custom package 
 
-3 - compile the custom package from "Z_USHE_CONCURRENT_INTERFACE.pks" and "Z_USHE_CONCURRENT_INTERFACE.pkb" respectively
-    In the package body, immediately following the revision comments you will find a number of global variables
+3 - Compile the custom package from "Z_USHE_CONCURRENT_INTERFACE.pks" and "Z_USHE_CONCURRENT_INTERFACE.pkb" respectively.
+    In the package body, immediately following the revision comments you will find a number of global variables.
     These need to be updated with values specific to your school:
     
     --global variables, requires update from school
@@ -37,14 +37,14 @@ Setup Instructions:
     gv_act_ela             CONSTANT VARCHAR2 (6) := 'A13';  --STVTESC, act_ela
     gv_act_composite       CONSTANT VARCHAR2 (6) := 'A05'; --STVTESC, act_composite
 
-4 - then use the stvxlbl script from the "setup - high school crosswalk prep.sql" to create a crosswalk label
-    (This file contains additional sripts to check the crosswalk tables for existing values, and examples of scripts you can use to populate SORXREF via inserts if desired)
+4 - Then use the stvxlbl script from the "setup - high school crosswalk prep.sql" to create a crosswalk label.
+    (This file contains additional sripts to check the crosswalk tables for existing values, and examples of scripts you can use to populate SORXREF via inserts if desired.)
 
-5 - populate the SORXREF_BANNER_VALUE field of "BannerSBGI.csv" with the Banner SGBI values specific to your university
+5 - Populate the SORXREF_BANNER_VALUE field of "BannerSBGI.csv" with the Banner SGBI values specific to your university.
     "BannerSBGI-USUexample.csv" is provided as a completed example. SBGI values are found through STVSBGI.
-    Use Toad, SQL Loader, or the the  Banner MDUU, to load the completed high school SBGI code crosswalk to SORXREF
+    Use Toad, SQL Loader, or the the  Banner MDUU, to load the completed high school SBGI code crosswalk to SORXREF.
 
-6 - Update the "ushe_data.sh" shell script with the username/password and path specific to your institution
+6 - Update the "ushe_data.sh" shell script with the username/password and path specific to your institution.
     Use this file to retrieve records from the USHE Concurrent Enrollment Participation system.
     A data sharing agreement will need to be compelted with USHE for them to provide credentials and create firewall exceptions.
 
@@ -55,5 +55,7 @@ Setup Instructions:
 Operational Overview:
 
 1 - The shell script retrieves records from the USHE system
+
 2 - The process Z_USHE_CONCURRENT_INTERFACE.p_process_records stages those records in the Banner SAR**** tables
+
 3 - The Baseline Banner process SARETMT pushes records from the SAR**** tables to Banner Student Admissions
