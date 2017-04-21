@@ -1,7 +1,7 @@
-/* Formatted on 3/7/2017 4:13:16 PM (QP5 v5.300) */
-DROP TABLE Z_USHE_CSV_EXT;
+/* Formatted on 4/21/2017 2:00:16 PM (QP5 v5.300) */
+DROP TABLE BANINST1.Z_USHE_CSV_EXT;
 
-CREATE TABLE Z_USHE_CSV_EXT
+CREATE TABLE BANINST1.Z_USHE_CSV_EXT
 (
     application_number          VARCHAR2 (32),
     term                        VARCHAR2 (32),
@@ -85,4 +85,5 @@ ORGANIZATION EXTERNAL
           LOCATION ('sn_ushe_data.csv'));
 
 --if needed for testing
-ALTER TABLE Z_USHE_CSV_EXT location (USHE_ETL:'sn_ushe_data.csv');
+
+ALTER TABLE BANINST1.Z_USHE_CSV_EXT location (USHE_ETL:'sn_ushe_data.csv');
