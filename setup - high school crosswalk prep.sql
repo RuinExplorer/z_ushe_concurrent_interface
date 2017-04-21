@@ -1,17 +1,13 @@
-/* Formatted on 4/13/2017 1:24:58 PM (QP5 v5.300) */
---script to return value SBGI CROSSWALK
+/* Formatted on 4/21/2017 4:37:15 PM (QP5 v5.300) */
+--Script to return values of SBGI CROSSWALK
 
 SELECT sorxref_edi_value, sorxref_banner_value, sorxref_desc
   FROM sorxref
  WHERE sorxref_xlbl_code = 'STVSBGI' AND sorxref_edi_standard_ind = 'Y';
 
---
---BUILD OUT SOAXREF VALUES
---
-
-SELECT *
-  FROM stvxlbl
- WHERE stvxlbl_code = 'STVSBGI';
+/*******************************************************************************
+  SETUP SCRIPT - Script to build out the required cross-walk label.
+*******************************************************************************/
 
 INSERT INTO stvxlbl (stvxlbl_code,
                      stvxlbl_desc,
@@ -22,19 +18,33 @@ INSERT INTO stvxlbl (stvxlbl_code,
              'N',
              TRUNC (SYSDATE));
 
+COMMIT;
+
+SELECT *
+  FROM stvxlbl
+ WHERE stvxlbl_code = 'STVSBGI';
+
+/*******************************************************************************
+  INFO - Script to verify successful load of BannerSBGI.csv table to SORXREF
+         via TOAD, SQL Loader, or Banner MDUU (Mass Data Update Utility)
+*******************************************************************************/
+
 SELECT *
   FROM sorxref
  WHERE sorxref_xlbl_code = 'STVSBGI';
 
---
---use sql loader, TOAD, or you prefered method to load the completed BannerSBGI.csv table to SORXREF
---
-
---example record, will need a record for each high school participating
+/*******************************************************************************
+  WARNING - OPTIONAL SCRIPT - Scripts to manually build out SORXREF entries
+   
+  This is unessesary if data was loaded via alternate method.
+  This script is supplied as a reference.
+*******************************************************************************/
 
 SELECT *
   FROM stvsbgi
  WHERE stvsbgi_desc LIKE '%CACHE%';
+
+--return was 450168
 
 INSERT INTO sorxref (SORXREF_XLBL_CODE,
                      SORXREF_EDI_VALUE,
@@ -55,9 +65,9 @@ INSERT INTO sorxref (SORXREF_XLBL_CODE,
              '450168', --Banner SBGI code from STVSBGI, USU happens to match ACT code
              'N');
 
---
---test space for crosswalk
---
+/*******************************************************************************
+  TESTING SCRIPT - Script to spot check the crosswalk for specific entries.
+*******************************************************************************/
 
 DECLARE
     param_lea_code      VARCHAR2 (2) := '4';
