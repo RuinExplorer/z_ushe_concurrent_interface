@@ -6,7 +6,7 @@ SELECT sorxref_edi_value, sorxref_banner_value, sorxref_desc
  WHERE sorxref_xlbl_code = 'STVSBGI' AND sorxref_edi_standard_ind = 'Y';
 
 /*******************************************************************************
-  SETUP SCRIPT - Script to build out the required cross-walk label.
+  STVXLBL SETUP SCRIPT - Script to build out the required cross-walk label.
 *******************************************************************************/
 
 INSERT INTO stvxlbl (stvxlbl_code,
