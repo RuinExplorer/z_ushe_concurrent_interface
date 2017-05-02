@@ -44,11 +44,13 @@ Setup Instructions:
     "BannerSBGI-USUexample.csv" is provided as a completed example. SBGI values are found through STVSBGI.
     Use Toad, SQL Loader, or the the  Banner MDUU, to load the completed high school SBGI code crosswalk to SORXREF.
 
-6 - Update the "ushe_data.sh" shell script with the username/password and path specific to your institution.
+6 - Verify successful load through the Banner Admin interface on SOAXREF. Check the Cross-Reference Label STVSBGI for the recently loaded values. Update the Cross-Reference Label STVCITZ as needed to match your Banner citizenship codes with the USHE values described at https://usu.app.box.com/s/2l1ebuc69vk183w01dtngctue9k3ybq1.
+
+7 - Update the "ushe_data.sh" shell script with the username/password and path specific to your institution.
     Use this file to retrieve records from the USHE Concurrent Enrollment Participation system.
     A data sharing agreement will need to be compelted with USHE for them to provide credentials and create firewall exceptions.
 
-7 - Complete setup of the Banner SARETMT (Electronic Application Verify/Load Process) in accordance with Ellucain documentation.
+8 - Complete setup of the Banner SARETMT (Electronic Application Verify/Load Process) in accordance with Ellucain documentation.
     We found the "Banner Student Self-Service Admissions Training Workbook Release 8.1 - October 2008) to be most helpful.
     While dated and variance exists between INB and Banner Pages, the step-by-step guide may be more useful than extensive user manuals.
 
