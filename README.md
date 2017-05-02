@@ -1,5 +1,5 @@
 # z_ushe_concurrent_interface
-Custom Banner package designed for Utah state colleges to consume USHE concurrent enrollment applicant information.
+Custom Banner package designed for Utah state colleges to consume USHE concurrent enrollment applicant information. The complete solution can be downloaded using the 'clone or download' button. Viewing individual files, the 'raw' button can be used to show plain text for copying directly from the browser.
 
 Setup Instructions:
 
@@ -37,7 +37,7 @@ Setup Instructions:
     gv_act_ela             CONSTANT VARCHAR2 (6) := 'A13';  --STVTESC, act_ela
     gv_act_composite       CONSTANT VARCHAR2 (6) := 'A05'; --STVTESC, act_composite
 
-4 - Then use the stvxlbl script from the "setup - high school crosswalk prep.sql" to create a crosswalk label.
+4 - Then use the STVXLBL SETUP SCRIPT from the "setup - high school crosswalk prep.sql" to create a crosswalk label.
     (This file contains additional sripts to check the crosswalk tables for existing values, and examples of scripts you can use to populate SORXREF via inserts if desired.)
 
 5 - Populate the SORXREF_BANNER_VALUE field of "BannerSBGI.csv" with the Banner SGBI values specific to your university.
