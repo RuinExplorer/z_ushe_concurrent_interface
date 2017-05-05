@@ -26,6 +26,7 @@ Setup Instructions:
     gv_parent1_rtln_code   CONSTANT VARCHAR2 (2) := 'M';             --STVRELT
     gv_parent2_rtln_code   CONSTANT VARCHAR2 (2) := 'F';             --STVRELT
     gv_xlbl_sbgi           CONSTANT VARCHAR2 (8) := 'STVSBGI'; --SORXREF label for SBGI entries
+    gv_xlbl_race           CONSTANT VARCHAR2 (8) := 'GORRACE'; --SORXREF label for race entries
 
     --global variables specific to ACT test score loading, requires update from school
     gv_act_writing         CONSTANT VARCHAR2 (6) := 'A07'; --STVTESC, act_writing
