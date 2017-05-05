@@ -1,4 +1,4 @@
-/* Formatted on 4/19/2017 3:59:33 PM (QP5 v5.300) */
+/* Formatted on 5/5/2017 4:36:13 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY BANINST1.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -31,6 +31,9 @@ AS
                                             fault tollerance,
                                             changed date format for full date fields
                                             due to spec change
+     20170505  Carl Ellsworth, USU        added procedure for SARPRAC
+                                            added f_translate_race
+                                            updated p_process_records to fix ethnicity
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -55,6 +58,7 @@ AS
     gv_parent1_rtln_code   CONSTANT VARCHAR2 (2) := 'M';             --STVRELT
     gv_parent2_rtln_code   CONSTANT VARCHAR2 (2) := 'F';             --STVRELT
     gv_xlbl_sbgi           CONSTANT VARCHAR2 (8) := 'STVSBGI'; --SORXREF label for SBGI entries
+    gv_xlbl_race           CONSTANT VARCHAR2 (8) := 'GORRACE'; --SORXREF label for race entries
 
     --global variables specific to ACT test score loading, requires update from school
     gv_act_writing         CONSTANT VARCHAR2 (6) := 'A07'; --STVTESC, act_writing
@@ -359,6 +363,32 @@ AS
             RAISE;
     END f_translate_state;
 
+    /**
+    * translation of race utilizing sorxref values for gorrace.
+    *
+    * @param    param_race          USHE race value
+    * @return                       Banner race value
+    */
+    FUNCTION f_translate_race (param_race VARCHAR2)
+        RETURN VARCHAR2
+    AS
+        lv_race   VARCHAR2 (1);
+    BEGIN
+        SELECT MAX (sorxref_banner_value)
+          INTO lv_race
+          FROM sorxref
+         WHERE     sorxref_xlbl_code = gv_xlbl_race
+               AND sorxref_edi_value = param_race
+               AND sorxref_edi_standard_ind = 'Y';
+
+        RETURN lv_race;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in function f_translate_race');
+            RAISE;
+    END f_translate_race;
 
     /**
     * translation of residency to Banner boolean value.
@@ -1020,6 +1050,35 @@ AS
             RAISE;
     END p_insert_sarhsum;
 
+
+    /**
+    * creates a new record in the race information table.
+    *
+    * @param    param_aidm         newly reserved aidm on which to build the record
+    * @param    param_race_code    banner race code from gorrace
+    */
+    PROCEDURE p_insert_sarprac (param_aidm NUMBER, param_race VARCHAR2)
+    AS
+    BEGIN
+        IF param_aidm IS NOT NULL
+        THEN
+            INSERT INTO SARPRAC (SARPRAC_AIDM,
+                                 SARPRAC_RACE_CDE,
+                                 SARPRAC_ACTIVITY_DATE,
+                                 SARPRAC_DATA_ORIGIN)
+                 VALUES (param_aidm,
+                         param_race,
+                         gv_process_date,
+                         gv_data_origin);
+        END IF;
+    EXCEPTION
+        WHEN OTHERS
+        THEN
+            DBMS_OUTPUT.put_line (
+                'EXCEPTION - unhandled exception in procedure p_insert_sarprac');
+            RAISE;
+    END p_insert_sarprac;
+
     /**
     * parses the ushe data file and populate the SAR*** tables prepetory to Banner
     * SARETMT process to admit students.
@@ -1141,7 +1200,7 @@ AS
                 param_gender         => f_translate_gender (r_student.gender),
                 param_citz_code      => r_student.citizenship,
                 param_ethn_code      => f_translate_ethnicity (
-                                           r_student.residency));
+                                           r_student.ethnicity));
 
             p_insert_sarphon (
                 param_aidm            => lv_aidm,
@@ -1205,6 +1264,11 @@ AS
             --create the curriculum and field of student records
             p_insert_saretry (param_aidm => lv_aidm);
             p_insert_sarefos (param_aidm => lv_aidm);
+
+            --create the Race record
+            p_insert_sarprac (
+                param_aidm   => lv_aidm,
+                param_race   => f_translate_race (r_student.race));
 
             --create the residency record
             p_insert_residency (
