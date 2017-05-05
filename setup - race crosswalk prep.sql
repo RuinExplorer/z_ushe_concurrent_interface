@@ -6,7 +6,7 @@ SELECT sorxref_edi_value, sorxref_banner_value, sorxref_desc
  WHERE sorxref_xlbl_code = 'GORRACE' AND sorxref_edi_standard_ind = 'Y';
 
 /*******************************************************************************
-  SETUP SCRIPT - Script to build out the required cross-walk label.
+  STVXLBL SETUP SCRIPT - Script to build out the required cross-walk label.
 *******************************************************************************/
 
 INSERT INTO stvxlbl (stvxlbl_code,
@@ -29,7 +29,7 @@ SELECT *
  WHERE stvxlbl_code = 'GORRACE';
 
 /*******************************************************************************
-  SETUP SCRIPTS - Scripts to manually build out SORXREF entries
+  DATA LOAD SCRIPTS - Scripts to manually build out SORXREF entries
    
   These are unessesary if data was loaded via alternate method.
 *******************************************************************************/
