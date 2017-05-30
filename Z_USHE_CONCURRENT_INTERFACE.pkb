@@ -1,4 +1,3 @@
-/* Formatted on 5/5/2017 4:36:13 PM (QP5 v5.300) */
 CREATE OR REPLACE PACKAGE BODY BANINST1.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -34,6 +33,7 @@ AS
      20170505  Carl Ellsworth, USU        added procedure for SARPRAC
                                             added f_translate_race
                                             updated p_process_records to fix ethnicity
+     20170530  Carl Ellsworth, USU        added support for middle anme and nickname
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -575,7 +575,9 @@ AS
                                 param_person_seqno    NUMBER,
                                 param_rltn_code       VARCHAR2 DEFAULT NULL,
                                 param_first_name      VARCHAR2,
+                                param_middle_name     VARCHAR2 DEFAULT NULL,
                                 param_last_name       VARCHAR2,
+                                param_nickname        VARCHAR2 DEFAULT NULL,
                                 param_birth_string    VARCHAR2 DEFAULT NULL,
                                 param_gender          VARCHAR2 DEFAULT NULL,
                                 param_citz_code       VARCHAR2 DEFAULT NULL,
@@ -591,7 +593,9 @@ AS
                                  SARPERS_ACTIVITY_DATE,
                                  SARPERS_RLTN_CDE,                   --STVRELT
                                  SARPERS_FIRST_NAME,
+                                 SARPERS_MIDDLE_NAME1,
                                  SARPERS_LAST_NAME,
+                                 SARPERS_NICKNAME,
                                  SARPERS_DFMT_CDE_BIRTH,
                                  SARPERS_BIRTH_DTE,
                                  SARPERS_GENDER,
@@ -605,7 +609,9 @@ AS
                          gv_process_date,
                          param_rltn_code,
                          param_first_name,
+                         param_middle_name,
                          param_last_name,
+                         param_nickname,
                          'MDC',  --date format string MDC is Month/Day/Century
                          param_birth_string,
                          param_gender,
@@ -1192,7 +1198,9 @@ AS
                 param_aidm           => lv_aidm,
                 param_person_seqno   => 1,
                 param_first_name     => r_student.student_first,
+                param_middle_name    => r_student.student_middle,
                 param_last_name      => r_student.student_last,
+                param_nickname       => r_student.student_preferred,
                 param_birth_string   => f_translate_date (
                                            r_student.birth_month,
                                            r_student.birth_day,
