@@ -1,3 +1,4 @@
+/* Formatted on 8/15/2017 12:17:03 PM (QP5 v5.313) */
 CREATE OR REPLACE PACKAGE BODY BANINST1.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -34,6 +35,9 @@ AS
                                             added f_translate_race
                                             updated p_process_records to fix ethnicity
      20170530  Carl Ellsworth, USU        added support for middle anme and nickname
+     20170621  Carl Ellsworth, USU        service now including dashes in ssn, trim to take them out
+     20170815  Carl Ellsworth, USU        added additional error handling
+
 
     References:
      -Admissions Application Set-Up Procedures for Banner Self-Service section of
@@ -448,9 +452,7 @@ AS
          WHERE     sorxref_xlbl_code = 'STVSBGI'
                AND sorxref_edi_standard_ind = 'Y'
                AND sorxref_edi_value =
-                          LPAD (param_lea_code, 2, '0')
-                       || '-'
-                       || param_school_code;
+                   LPAD (param_lea_code, 2, '0') || '-' || param_school_code;
 
         RETURN lv_sbgi;
     EXCEPTION
@@ -652,8 +654,9 @@ AS
                          1,              --only loading SSN for student record
                          1,                             --only loading one SSN
                          gv_process_date,
-                         'SY',             --unknown, all our entires are 'SY'
-                         param_ssn,
+                         'SY',           --unknown, all our entires are 'SY'--
+                         --                         param_ssn,   service now was including dashes in ssn
+                         TRIM (REPLACE (param_ssn, '-', '')),
                          gv_data_origin);
         END IF;
     EXCEPTION
@@ -1171,261 +1174,289 @@ AS
     BEGIN
         FOR r_student IN c_student
         LOOP
-            lv_success_flag := 'Y';
-
-            --obtain an aidm
-            lv_aidm := f_reserve_aidm ();
-
-            --create a base record
-            p_insert_sabnstu (
-                param_aidm      => lv_aidm,
-                param_id        => REPLACE (r_student.application_number,
-                                            'CEAPP',
-                                            ''),
-                param_success   => lv_success_flag);
-
-            --if header record creation failed, skip this loop iteration
-            CONTINUE WHEN lv_success_flag = 'N';
-
-            --create a header record
-            p_insert_sarhead (
-                param_aidm        => lv_aidm,
-                param_term_code   => f_get_term (r_student.term));
-
-            --PERSON Logic
-            --first call for student
-            p_insert_sarpers (
-                param_aidm           => lv_aidm,
-                param_person_seqno   => 1,
-                param_first_name     => r_student.student_first,
-                param_middle_name    => r_student.student_middle,
-                param_last_name      => r_student.student_last,
-                param_nickname       => r_student.student_preferred,
-                param_birth_string   => f_translate_date (
-                                           r_student.birth_month,
-                                           r_student.birth_day,
-                                           r_student.birth_year),
-                param_gender         => f_translate_gender (r_student.gender),
-                param_citz_code      => r_student.citizenship,
-                param_ethn_code      => f_translate_ethnicity (
-                                           r_student.ethnicity));
-
-            p_insert_sarphon (
-                param_aidm            => lv_aidm,
-                param_person_seqno    => 1,
-                param_phone_number    => r_student.student_phone,
-                param_email_address   => r_student.student_email);
-
-            --second call for parent1
-            IF (    r_student.parent1_first IS NOT NULL
-                AND r_student.parent1_last IS NOT NULL)
-            THEN
-                p_insert_sarpers (
-                    param_aidm           => lv_aidm,
-                    param_person_seqno   => 2,
-                    param_rltn_code      => gv_parent1_rtln_code,
-                    param_first_name     => r_student.parent1_first,
-                    param_last_name      => r_student.parent1_last);
-
-                p_insert_sarphon (
-                    param_aidm            => lv_aidm,
-                    param_person_seqno    => 2,
-                    param_phone_number    => r_student.parent1_phone,
-                    param_email_address   => r_student.parent1_email);
-            END IF;
-
-            --third call for parent2
-            IF (    r_student.parent2_first IS NOT NULL
-                AND r_student.parent2_last IS NOT NULL)
-            THEN
-                p_insert_sarpers (
-                    param_aidm           => lv_aidm,
-                    param_person_seqno   => 3,
-                    param_rltn_code      => gv_parent2_rtln_code,
-                    param_first_name     => r_student.parent2_first,
-                    param_last_name      => r_student.parent2_last);
-
-                p_insert_sarphon (
-                    param_aidm            => lv_aidm,
-                    param_person_seqno    => 3,
-                    param_phone_number    => r_student.parent2_phone,
-                    param_email_address   => r_student.parent2_email);
-            END IF;
-
-            --add SSN if provided
-            IF (r_student.ssn IS NOT NULL)
-            THEN
-                p_insert_sarprfn (param_aidm   => lv_aidm,
-                                  param_ssn    => r_student.ssn);
-            END IF;
-
-            --create address record
-            p_insert_saraddr (
-                param_aidm           => lv_aidm,
-                param_street_line1   => r_student.address1,
-                param_street_line2   => r_student.address2,
-                param_city           => r_student.city,
-                param_state_code     => f_translate_state (
-                                           r_student.state_desc),
-                param_zip            => r_student.zip_code);
-
-            --create the curriculum and field of student records
-            p_insert_saretry (param_aidm => lv_aidm);
-            p_insert_sarefos (param_aidm => lv_aidm);
-
-            --create the Race record
-            p_insert_sarprac (
-                param_aidm   => lv_aidm,
-                param_race   => f_translate_race (r_student.race));
-
-            --create the residency record
-            p_insert_residency (
-                param_aidm             => lv_aidm,
-                param_residency_bool   => f_translate_residency (
-                                             r_student.residency));
-
-            --create ACT test score entries
             BEGIN
-                lv_test_count := 0;
+                lv_success_flag := 'Y';
 
-                IF r_student.act_test_date IS NOT NULL
+                --obtain an aidm
+                lv_aidm := f_reserve_aidm ();
+
+                --create a base record
+                p_insert_sabnstu (
+                    param_aidm =>
+                        lv_aidm,
+                    param_id =>
+                        REPLACE (r_student.application_number, 'CEAPP', ''),
+                    param_success =>
+                        lv_success_flag);
+
+                --if header record creation failed, skip this loop iteration
+                CONTINUE WHEN lv_success_flag = 'N';
+
+                --create a header record
+                p_insert_sarhead (
+                    param_aidm        => lv_aidm,
+                    param_term_code   => f_get_term (r_student.term));
+
+                --PERSON Logic
+                --first call for student
+                p_insert_sarpers (
+                    param_aidm =>
+                        lv_aidm,
+                    param_person_seqno =>
+                        1,
+                    param_first_name =>
+                        r_student.student_first,
+                    param_middle_name =>
+                        r_student.student_middle,
+                    param_last_name =>
+                        r_student.student_last,
+                    param_nickname =>
+                        r_student.student_preferred,
+                    param_birth_string =>
+                        f_translate_date (r_student.birth_month,
+                                          r_student.birth_day,
+                                          r_student.birth_year),
+                    param_gender =>
+                        f_translate_gender (r_student.gender),
+                    param_citz_code =>
+                        r_student.citizenship,
+                    param_ethn_code =>
+                        f_translate_ethnicity (r_student.ethnicity));
+
+                p_insert_sarphon (
+                    param_aidm            => lv_aidm,
+                    param_person_seqno    => 1,
+                    param_phone_number    => r_student.student_phone,
+                    param_email_address   => r_student.student_email);
+
+                --second call for parent1
+                IF (    r_student.parent1_first IS NOT NULL
+                    AND r_student.parent1_last IS NOT NULL)
                 THEN
-                    lv_test_date :=
-                           SUBSTR (r_student.act_test_date, 6, 2)
-                        || CHR (47)
-                        || SUBSTR (r_student.act_test_date, 9, 2)
-                        || CHR (47)
-                        || SUBSTR (r_student.act_test_date, 1, 4);
-                ELSE
-                    RAISE null_test_date;
+                    p_insert_sarpers (
+                        param_aidm           => lv_aidm,
+                        param_person_seqno   => 2,
+                        param_rltn_code      => gv_parent1_rtln_code,
+                        param_first_name     => r_student.parent1_first,
+                        param_last_name      => r_student.parent1_last);
+
+                    p_insert_sarphon (
+                        param_aidm            => lv_aidm,
+                        param_person_seqno    => 2,
+                        param_phone_number    => r_student.parent1_phone,
+                        param_email_address   => r_student.parent1_email);
                 END IF;
 
-                --act_writing
-                IF r_student.act_writing IS NOT NULL
+                --third call for parent2
+                IF (    r_student.parent2_first IS NOT NULL
+                    AND r_student.parent2_last IS NOT NULL)
                 THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_writing,
-                        param_test_score   => r_student.act_writing);
+                    p_insert_sarpers (
+                        param_aidm           => lv_aidm,
+                        param_person_seqno   => 3,
+                        param_rltn_code      => gv_parent2_rtln_code,
+                        param_first_name     => r_student.parent2_first,
+                        param_last_name      => r_student.parent2_last);
+
+                    p_insert_sarphon (
+                        param_aidm            => lv_aidm,
+                        param_person_seqno    => 3,
+                        param_phone_number    => r_student.parent2_phone,
+                        param_email_address   => r_student.parent2_email);
                 END IF;
 
-                --act_science
-                IF r_student.act_science IS NOT NULL
+                --add SSN if provided
+                IF (r_student.ssn IS NOT NULL)
                 THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_science,
-                        param_test_score   => r_student.act_science);
+                    p_insert_sarprfn (param_aidm   => lv_aidm,
+                                      param_ssn    => r_student.ssn);
                 END IF;
 
-                --act_stem
-                IF r_student.act_stem IS NOT NULL
+                --create address record
+                p_insert_saraddr (
+                    param_aidm =>
+                        lv_aidm,
+                    param_street_line1 =>
+                        r_student.address1,
+                    param_street_line2 =>
+                        r_student.address2,
+                    param_city =>
+                        r_student.city,
+                    param_state_code =>
+                        f_translate_state (r_student.state_desc),
+                    param_zip =>
+                        r_student.zip_code);
+
+                --create the curriculum and field of student records
+                p_insert_saretry (param_aidm => lv_aidm);
+                p_insert_sarefos (param_aidm => lv_aidm);
+
+                --create the Race record
+                p_insert_sarprac (
+                    param_aidm   => lv_aidm,
+                    param_race   => f_translate_race (r_student.race));
+
+                --create the residency record
+                p_insert_residency (
+                    param_aidm =>
+                        lv_aidm,
+                    param_residency_bool =>
+                        f_translate_residency (r_student.residency));
+
+                --create ACT test score entries
+                BEGIN
+                    lv_test_count := 0;
+
+                    IF r_student.act_test_date IS NOT NULL
+                    THEN
+                        lv_test_date :=
+                               SUBSTR (r_student.act_test_date, 6, 2)
+                            || CHR (47)
+                            || SUBSTR (r_student.act_test_date, 9, 2)
+                            || CHR (47)
+                            || SUBSTR (r_student.act_test_date, 1, 4);
+                    ELSE
+                        RAISE null_test_date;
+                    END IF;
+
+                    --act_writing
+                    IF r_student.act_writing IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_writing,
+                            param_test_score   => r_student.act_writing);
+                    END IF;
+
+                    --act_science
+                    IF r_student.act_science IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_science,
+                            param_test_score   => r_student.act_science);
+                    END IF;
+
+                    --act_stem
+                    IF r_student.act_stem IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_stem,
+                            param_test_score   => r_student.act_stem);
+                    END IF;
+
+                    --act_reading
+                    IF r_student.act_reading IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_reading,
+                            param_test_score   => r_student.act_reading);
+                    END IF;
+
+                    --act_math
+                    IF r_student.act_math IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_math,
+                            param_test_score   => r_student.act_math);
+                    END IF;
+
+                    --act_english
+                    IF r_student.act_english IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_english,
+                            param_test_score   => r_student.act_english);
+                    END IF;
+
+                    --act_ela
+                    IF r_student.act_ela IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_ela,
+                            param_test_score   => r_student.act_ela);
+                    END IF;
+
+                    --act_composite
+                    IF r_student.act_composite IS NOT NULL
+                    THEN
+                        lv_test_count := lv_test_count + 1;
+                        p_insert_sartest (
+                            param_aidm         => lv_aidm,
+                            param_seqno        => lv_test_count,
+                            param_test_date    => lv_test_date,
+                            param_subt_code    => gv_act_composite,
+                            param_test_score   => r_student.act_composite);
+                    END IF;
+                EXCEPTION
+                    WHEN null_test_date
+                    THEN
+                        NULL;
+                /*DBMS_OUTPUT.put_line (
+                       REPLACE (r_student.application_number,
+                                'CEAPP',
+                                '')
+                    || ' had no test date.');*/
+                END;
+
+                --create the high school record
+                p_insert_sarhsch (
+                    param_aidm =>
+                        lv_aidm,
+                    param_sbgi_code =>
+                        f_translate_school_code (
+                            param_lea_code      => r_student.district_code,
+                            param_school_code   => r_student.high_school_code),
+                    param_graduation_date =>
+                        f_translate_date (
+                            param_month   => r_student.anticipated_grad_month,
+                            param_day     => NULL,
+                            param_year    => r_student.anticipated_grad_year),
+                    param_school_name =>
+                        r_student.high_school_desc);
+
+                --create the high school info record
+                IF (r_student.gpa IS NOT NULL)
                 THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_stem,
-                        param_test_score   => r_student.act_stem);
+                    p_insert_sarhsum (param_aidm   => lv_aidm,
+                                      param_gpa    => r_student.gpa);
                 END IF;
 
-                --act_reading
-                IF r_student.act_reading IS NOT NULL
-                THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_reading,
-                        param_test_score   => r_student.act_reading);
-                END IF;
-
-                --act_math
-                IF r_student.act_math IS NOT NULL
-                THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_math,
-                        param_test_score   => r_student.act_math);
-                END IF;
-
-                --act_english
-                IF r_student.act_english IS NOT NULL
-                THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_english,
-                        param_test_score   => r_student.act_english);
-                END IF;
-
-                --act_ela
-                IF r_student.act_ela IS NOT NULL
-                THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (param_aidm         => lv_aidm,
-                                      param_seqno        => lv_test_count,
-                                      param_test_date    => lv_test_date,
-                                      param_subt_code    => gv_act_ela,
-                                      param_test_score   => r_student.act_ela);
-                END IF;
-
-                --act_composite
-                IF r_student.act_composite IS NOT NULL
-                THEN
-                    lv_test_count := lv_test_count + 1;
-                    p_insert_sartest (
-                        param_aidm         => lv_aidm,
-                        param_seqno        => lv_test_count,
-                        param_test_date    => lv_test_date,
-                        param_subt_code    => gv_act_composite,
-                        param_test_score   => r_student.act_composite);
-                END IF;
+                --update count for process DBMS output
+                lv_count := lv_count + 1;
             EXCEPTION
-                WHEN null_test_date
+                WHEN OTHERS
                 THEN
-                    NULL;
-            /*DBMS_OUTPUT.put_line (
-                   REPLACE (r_student.application_number,
-                            'CEAPP',
-                            '')
-                || ' had no test date.');*/
+                    DBMS_OUTPUT.put_line (
+                           'EXCEPTION - unhandled exception in p_process_records loop; skipping application record '
+                        || r_student.application_number);
             END;
-
-            --create the high school record
-            p_insert_sarhsch (
-                param_aidm              => lv_aidm,
-                param_sbgi_code         => f_translate_school_code (
-                                              param_lea_code      => r_student.district_code,
-                                              param_school_code   => r_student.high_school_code),
-                param_graduation_date   => f_translate_date (
-                                              param_month   => r_student.anticipated_grad_month,
-                                              param_day     => NULL,
-                                              param_year    => r_student.anticipated_grad_year),
-                param_school_name       => r_student.high_school_desc);
-
-            --create the high school info record
-            IF (r_student.gpa IS NOT NULL)
-            THEN
-                p_insert_sarhsum (param_aidm   => lv_aidm,
-                                  param_gpa    => r_student.gpa);
-            END IF;
-
-            --update count for process DBMS output
-            lv_count := lv_count + 1;
         END LOOP;
 
         DBMS_OUTPUT.put_line (
