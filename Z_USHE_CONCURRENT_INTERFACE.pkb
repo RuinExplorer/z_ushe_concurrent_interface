@@ -1,4 +1,4 @@
-/* Formatted on 8/15/2017 12:17:03 PM (QP5 v5.313) */
+/* Formatted on 1/30/2018 9:35:47 AM (QP5 v5.318) */
 CREATE OR REPLACE PACKAGE BODY BANINST1.z_ushe_concurrent_interface
 AS
     /******************************************************************************
@@ -35,8 +35,9 @@ AS
                                             added f_translate_race
                                             updated p_process_records to fix ethnicity
      20170530  Carl Ellsworth, USU        added support for middle anme and nickname
-     20170621  Carl Ellsworth, USU        service now including dashes in ssn, trim to take them out
+     20170621  Carl Ellsworth, USU        service now including dashes in ssn trim to take the out
      20170815  Carl Ellsworth, USU        added additional error handling
+     20180130  Carl Ellsworth, USU        added substr function for long high school names
 
 
     References:
@@ -1001,7 +1002,7 @@ AS
                          'MDC',  --date format string MDC is Month/Day/Century
                          param_graduation_date,
                          'HS',                   --high school identifier code
-                         param_school_name,
+                         SUBSTR (param_school_name, 1, 35),
                          gv_data_origin);
         END IF;
     EXCEPTION
